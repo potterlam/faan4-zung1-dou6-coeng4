@@ -22,7 +22,7 @@ Shodo Dojo is a dojo-themed traditional Chinese character writing practice game.
 - 🀄 **粵拼標注** — 每個字配有粵拼（Jyutping）、意思、部首、筆畫數
 - 🤺 **道場對手** — 3 位風格各異嘅對手，用地道廣東話同你對話
 - 📝 **自訂題庫** — 自由建立練習題庫，支援匯入匯出
-- 🔧 **題庫產生器** — 內建工具頁面，支援 1,410 個常用字自動查詢
+- 🔧 **題庫產生器** — 內建工具頁面，支援 3,000+ 個常用字自動查詢
 - 📖 **CUHK 字庫** — 連結中大粵語審音配詞字庫查詢
 - 🌐 **中英切換** — 遊戲介面支援中文／英文切換
 - 💡 **提示系統** — 粵拼、意思、部首、例詞多層提示
@@ -39,7 +39,7 @@ Shodo Dojo is a dojo-themed traditional Chinese character writing practice game.
 ## 🛠️ 自訂題庫 Custom Stages
 
 - 使用內建[題庫產生器](https://potterlam.github.io/faan4-zung1-dou6-coeng4/tools/generate.html)建立自訂練習
-- 支援 1,410 個常用繁體字自動查詢粵拼、意思、部首
+- 支援 3,000+ 個常用繁體字自動查詢粵拼、意思、部首
 - 可匯出為 `.js` 檔案，或直接載入遊戲
 - 自訂關卡永遠以鼓勵方式評分，唔會話你「未通過」
 
@@ -57,7 +57,7 @@ shodo-dojo/
 └── tools/
     ├── generate.html   # 題庫產生器工具
     └── js/
-        └── char-lookup.js  # 1,410 字字典
+        └── char-lookup.js  # 3,000+ 字字典
 ```
 
 ## 🧰 使用技術 Tech Stack
