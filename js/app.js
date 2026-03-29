@@ -1,7 +1,21 @@
 // ============================================================
-// 書道場 — Main Game Engine
+// 書道場 — Main Game Engine (Refactored)
 // Handles all game logic, audio, UI, and Hanzi Writer integration
 // ============================================================
+
+// ── DOM Helper ────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+
+// ── Shared HanziWriter charDataLoader ─────────────────────
+function loadCharData(char, onComplete, onError) {
+  fetch('https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0/' + encodeURIComponent(char) + '.json')
+    .then(function(r) { return r.json(); })
+    .then(onComplete)
+    .catch(function(e) {
+      console.error('Failed to load char data:', char, e);
+      if (onError) onError(e);
+    });
+}
 
 const GAME_I18N = {
   zh: {
@@ -121,29 +135,22 @@ class ShodoDojo {
   // ── Screen Management ───────────────────────────────────
   showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    const screen = document.getElementById(screenId);
+    const screen = $(screenId);
     if (screen) {
-      screen.classList.add('active');
-      screen.classList.add('screen-enter');
+      screen.classList.add('active', 'screen-enter');
       setTimeout(() => screen.classList.remove('screen-enter'), 400);
     }
     this.state.currentScreen = screenId;
 
-    if (screenId === 'level-select') {
-      this.updateLevelCards();
-    }
-    if (screenId === 'title-screen') {
-      this.startBGM();
-    }
+    if (screenId === 'level-select') this.updateLevelCards();
+    if (screenId === 'title-screen') this.startBGM();
   }
 
   // ── Level Select ────────────────────────────────────────
   updateLevelCards() {
-    const levels = ['level1', 'level2', 'level3'];
-    levels.forEach((lvl, i) => {
-      const card = document.getElementById('level-card-' + (i + 1));
-      const scoreEl = document.getElementById('score-' + lvl);
-      const data = CHARACTER_DB[lvl];
+    ['level1', 'level2', 'level3'].forEach((lvl, i) => {
+      const card = $('level-card-' + (i + 1));
+      const scoreEl = $('score-' + lvl);
       const isUnlocked = i === 0 || this.state.levelsCompleted['level' + i];
 
       if (isUnlocked) {
@@ -152,18 +159,14 @@ class ShodoDojo {
         if (lockEl) lockEl.style.display = 'none';
       }
 
-      if (this.state.levelScores[lvl] !== undefined) {
-        scoreEl.textContent = '最高分：' + this.state.levelScores[lvl];
-      } else {
-        scoreEl.textContent = '';
-      }
+      scoreEl.textContent = this.state.levelScores[lvl] !== undefined
+        ? '最高分：' + this.state.levelScores[lvl] : '';
     });
 
-    // Update custom level card
     if (CHARACTER_DB.custom) {
-      const card = document.getElementById('level-card-custom');
+      const card = $('level-card-custom');
       if (card) card.style.display = '';
-      const scoreEl = document.getElementById('score-custom');
+      const scoreEl = $('score-custom');
       if (scoreEl && this.state.levelScores.custom !== undefined) {
         scoreEl.textContent = '最高分：' + this.state.levelScores.custom;
       }
@@ -174,22 +177,21 @@ class ShodoDojo {
   startLevel(levelKey) {
     if (levelKey !== 'custom') {
       const levelIndex = parseInt(levelKey.replace('level', ''));
-      const isUnlocked = levelIndex === 1 || this.state.levelsCompleted['level' + (levelIndex - 1)];
-      if (!isUnlocked) return;
+      if (levelIndex !== 1 && !this.state.levelsCompleted['level' + (levelIndex - 1)]) return;
     }
 
     const data = CHARACTER_DB[levelKey];
     if (!data) return;
 
-    // Shuffle and pick characters
-    const shuffled = [...data.characters].sort(() => Math.random() - 0.5);
-    this.state.characters = shuffled;
-    this.state.currentLevel = levelKey;
-    this.state.currentCharIndex = 0;
-    this.state.score = 0;
-    this.state.totalMistakes = 0;
-    this.state.hintsUsedTotal = 0;
-    this.state.perfectCount = 0;
+    Object.assign(this.state, {
+      characters: [...data.characters].sort(() => Math.random() - 0.5),
+      currentLevel: levelKey,
+      currentCharIndex: 0,
+      score: 0,
+      totalMistakes: 0,
+      hintsUsedTotal: 0,
+      perfectCount: 0
+    });
 
     this.showScreen('game-screen');
     this.setupOpponent();
@@ -206,9 +208,7 @@ class ShodoDojo {
     const opponent = OPPONENTS[opponentKey];
     if (!opponent) return;
 
-    document.getElementById('opponent-name').textContent = opponent.name;
-
-    // Set avatar color
+    $('opponent-name').textContent = opponent.name;
     const body = document.querySelector('#game-screen .avatar-body');
     if (body) body.style.background = opponent.avatar.body;
 
@@ -216,28 +216,18 @@ class ShodoDojo {
   }
 
   setExpression(mood) {
-    const el = document.getElementById('avatar-expression');
     const moods = {
-      greeting: '😊',
-      challenge: '🤨',
-      mock: '😏',
-      praise: '😄',
-      perfect: '😲',
-      angry: '😤',
-      proud: '😌',
-      hint: '🤔'
+      greeting: '😊', challenge: '🤨', mock: '😏', praise: '😄',
+      perfect: '😲', angry: '😤', proud: '😌', hint: '🤔'
     };
-    el.textContent = moods[mood] || '😊';
+    $('avatar-expression').textContent = moods[mood] || '😊';
   }
 
   showDialogue(category) {
     const text = getDialogue(this.state.currentLevel, category);
-    const el = document.getElementById('dialogue-text');
+    const el = $('dialogue-text');
     el.style.opacity = 0;
-    setTimeout(() => {
-      el.textContent = text;
-      el.style.opacity = 1;
-    }, 150);
+    setTimeout(() => { el.textContent = text; el.style.opacity = 1; }, 150);
   }
 
   // ── Present Character ───────────────────────────────────
@@ -253,22 +243,22 @@ class ShodoDojo {
     this.state.charMistakes = 0;
     this.state.hintsUsed = 0;
 
-    // Update info panel
-    document.getElementById('char-emoji').textContent = charData.emoji;
-    document.getElementById('char-display-big').textContent = charData.char;
-    document.getElementById('char-jyutping').textContent = charData.jyutping;
-    document.getElementById('char-meaning').textContent = charData.meaningZh + ' (' + charData.meaning + ')';
-    document.getElementById('char-radical').textContent = charData.radical + ' — ' + charData.radicalName;
-    document.getElementById('char-strokes').textContent = charData.strokeCount + ' 畫';
+    // Info panel
+    $('char-emoji').textContent = charData.emoji;
+    $('char-display-big').textContent = charData.char;
+    $('char-jyutping').textContent = charData.jyutping;
+    $('char-meaning').textContent = charData.meaningZh + ' (' + charData.meaning + ')';
+    $('char-radical').textContent = charData.radical + ' — ' + charData.radicalName;
+    $('char-strokes').textContent = charData.strokeCount + ' 畫';
 
     // Reset hints
-    document.getElementById('hints-list').innerHTML = '<p class="hint-placeholder">撳下面個掣攞提示</p>';
-    document.getElementById('btn-hint').disabled = false;
+    $('hints-list').innerHTML = '<p class="hint-placeholder">撳下面個掣攞提示</p>';
+    $('btn-hint').disabled = false;
 
-    // Show buttons
-    document.getElementById('btn-demo').style.display = '';
-    document.getElementById('btn-start-quiz').style.display = '';
-    document.getElementById('btn-next').style.display = 'none';
+    // Buttons
+    $('btn-demo').style.display = '';
+    $('btn-start-quiz').style.display = '';
+    $('btn-next').style.display = 'none';
 
     // Update progress
     this.updateGameUI();
@@ -285,79 +275,50 @@ class ShodoDojo {
     // Create demo writer
     this.createDemoWriter(charData.char);
 
-    // Auto-play demo if enabled
     if (this.state.showStrokeDemo) {
-      document.getElementById('writing-status').textContent = '觀看示範';
-      document.getElementById('demo-container').style.display = '';
-      document.getElementById('quiz-container').style.display = 'none';
+      $('writing-status').textContent = '觀看示範';
+      $('demo-container').style.display = '';
+      $('quiz-container').style.display = 'none';
       setTimeout(() => this.playDemo(), 800);
     } else {
-      // Skip demo, go straight to quiz
-      document.getElementById('btn-demo').style.display = '';
+      $('btn-demo').style.display = '';
       this.createQuizWriter(charData.char);
     }
   }
 
-  // ── Hanzi Writer: Demo ──────────────────────────────────
-  createDemoWriter(char) {
-    const container = document.getElementById('hanzi-demo');
+  // ── HanziWriter Factory ─────────────────────────────────
+  _createWriter(containerId, char, extraOpts) {
+    const container = $(containerId);
     container.innerHTML = '';
-
     const size = this.getWriterSize();
+    const baseOpts = {
+      width: size, height: size, padding: 10,
+      showOutline: this.state.showOutline,
+      showCharacter: false,
+      strokeColor: '#1a1a1a',
+      outlineColor: '#ddd',
+      charDataLoader: loadCharData
+    };
     try {
-      this.demoWriter = HanziWriter.create(container, char, {
-        width: size,
-        height: size,
-        padding: 10,
-        showOutline: this.state.showOutline,
-        showCharacter: false,
-        strokeAnimationSpeed: 1,
-        delayBetweenStrokes: 400,
-        strokeColor: '#1a1a1a',
-        outlineColor: '#ddd',
-        drawingColor: '#c41e3a',
-        radicalColor: '#c41e3a',
-        charDataLoader: function(char, onComplete, onError) {
-          fetch('https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0/' + encodeURIComponent(char) + '.json')
-            .then(function(r) { return r.json(); })
-            .then(onComplete)
-            .catch(function(e) { console.error('Failed to load char data:', char, e); if (onError) onError(e); });
-        }
-      });
+      return HanziWriter.create(container, char, Object.assign(baseOpts, extraOpts));
     } catch (e) {
-      console.error('Failed to create demo writer:', e);
+      console.error('Failed to create writer in #' + containerId + ':', e);
+      return null;
     }
   }
 
-  createQuizWriter(char) {
-    const container = document.getElementById('hanzi-quiz');
-    container.innerHTML = '';
+  createDemoWriter(char) {
+    this.demoWriter = this._createWriter('hanzi-demo', char, {
+      strokeAnimationSpeed: 1, delayBetweenStrokes: 400,
+      drawingColor: '#c41e3a', radicalColor: '#c41e3a'
+    });
+  }
 
-    const size = this.getWriterSize();
-    try {
-      this.quizWriter = HanziWriter.create(container, char, {
-        width: size,
-        height: size,
-        padding: 10,
-        showOutline: this.state.showOutline,
-        showCharacter: false,
-        showHintAfterMisses: 3,
-        highlightOnComplete: true,
-        strokeColor: '#1a1a1a',
-        outlineColor: '#ddd',
-        drawingColor: '#1a1a1a',
-        highlightColor: '#c41e3a',
-        drawingWidth: 6,
-        charDataLoader: function(char, onComplete, onError) {
-          fetch('https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0/' + encodeURIComponent(char) + '.json')
-            .then(function(r) { return r.json(); })
-            .then(onComplete)
-            .catch(function(e) { console.error('Failed to load char data:', char, e); if (onError) onError(e); });
-        }
-      });
-    } catch (e) {
-      console.error('Failed to create quiz writer:', e);
-    }
+  createQuizWriter(char) {
+    this.quizWriter = this._createWriter('hanzi-quiz', char, {
+      showHintAfterMisses: 3, highlightOnComplete: true,
+      drawingColor: '#1a1a1a', highlightColor: '#c41e3a', drawingWidth: 6
+    });
   }
 
   getWriterSize() {
@@ -369,17 +330,14 @@ class ShodoDojo {
 
   playDemo() {
     if (!this.demoWriter) return;
-
-    document.getElementById('demo-container').style.display = '';
-    document.getElementById('quiz-container').style.display = 'none';
-    document.getElementById('writing-status').textContent = '觀看示範';
-    document.getElementById('btn-start-quiz').style.display = '';
+    $('demo-container').style.display = '';
+    $('quiz-container').style.display = 'none';
+    $('writing-status').textContent = '觀看示範';
+    $('btn-start-quiz').style.display = '';
 
     this.demoWriter.hideCharacter();
     this.demoWriter.animateCharacter({
-      onComplete: () => {
-        document.getElementById('writing-status').textContent = '示範完成 — 準備開始書寫';
-      }
+      onComplete: () => { $('writing-status').textContent = '示範完成 — 準備開始書寫'; }
     });
   }
 
@@ -388,11 +346,11 @@ class ShodoDojo {
     const charData = this.state.characters[this.state.currentCharIndex];
     if (!charData) return;
 
-    document.getElementById('demo-container').style.display = 'none';
-    document.getElementById('quiz-container').style.display = '';
-    document.getElementById('writing-status').textContent = '✏️ 請書寫：' + charData.char;
-    document.getElementById('btn-demo').style.display = '';
-    document.getElementById('btn-start-quiz').style.display = 'none';
+    $('demo-container').style.display = 'none';
+    $('quiz-container').style.display = '';
+    $('writing-status').textContent = '✏️ 請書寫：' + charData.char;
+    $('btn-demo').style.display = '';
+    $('btn-start-quiz').style.display = 'none';
 
     this.createQuizWriter(charData.char);
 
@@ -403,21 +361,17 @@ class ShodoDojo {
     });
   }
 
-  handleMistake(strokeData) {
+  handleMistake() {
     this.state.charMistakes++;
     this.state.totalMistakes++;
     this.playSFX('wrong');
     this.showStrokeFeedback('✗', false);
     this.showDialogue('mock');
     this.setExpression('mock');
-
-    // Shake opponent
-    const avatar = document.getElementById('opponent-avatar');
-    avatar.classList.add('opponent-shake');
-    setTimeout(() => avatar.classList.remove('opponent-shake'), 400);
+    this._animateAvatar('opponent-shake', 400);
   }
 
-  handleCorrectStroke(strokeData) {
+  handleCorrectStroke() {
     this.playSFX('correct');
     this.showStrokeFeedback('✓', true);
   }
@@ -428,7 +382,8 @@ class ShodoDojo {
     const charScore = Math.max(0, 100 - (mistakes * 20) - (hintsUsed * 10));
     this.state.score += charScore;
 
-    if (mistakes === 0 && hintsUsed === 0) {
+    const isPerfect = mistakes === 0 && hintsUsed === 0;
+    if (isPerfect) {
       this.state.perfectCount++;
       this.showDialogue('perfect');
       this.setExpression('perfect');
@@ -439,16 +394,17 @@ class ShodoDojo {
       this.showStrokeFeedback('+' + charScore, true);
     }
 
-    // Bounce animation
-    const avatar = document.getElementById('opponent-avatar');
-    avatar.classList.add('opponent-happy');
-    setTimeout(() => avatar.classList.remove('opponent-happy'), 500);
-
-    document.getElementById('writing-status').textContent = '✅ 完成！得分 +' + charScore;
-    document.getElementById('btn-next').style.display = '';
-    document.getElementById('btn-demo').style.display = 'none';
-
+    this._animateAvatar('opponent-happy', 500);
+    $('writing-status').textContent = '✅ 完成！得分 +' + charScore;
+    $('btn-next').style.display = '';
+    $('btn-demo').style.display = 'none';
     this.updateGameUI();
+  }
+
+  _animateAvatar(cls, duration) {
+    const avatar = $('opponent-avatar');
+    avatar.classList.add(cls);
+    setTimeout(() => avatar.classList.remove(cls), duration);
   }
 
   // ── Next Character ──────────────────────────────────────
@@ -463,108 +419,94 @@ class ShodoDojo {
 
   // ── Finish Level ────────────────────────────────────────
   finishLevel() {
-    const levelKey = this.state.currentLevel;
+    const { currentLevel: levelKey, score, perfectCount, characters } = this.state;
     const data = CHARACTER_DB[levelKey];
     const isCustom = levelKey === 'custom';
-    // Custom stages always count as passed to encourage practice
-    const passed = isCustom ? true : (this.state.score >= data.passScore);
+    const passed = isCustom || (score >= data.passScore);
 
-    // Save progress
+    this._saveProgress(levelKey, passed, isCustom);
+    this.showScreen('results-screen');
+    this._renderResults(levelKey, passed, isCustom, perfectCount, characters.length);
+  }
+
+  _saveProgress(levelKey, passed, isCustom) {
     if (passed && !isCustom) {
       this.state.levelsCompleted[levelKey] = true;
       localStorage.setItem('shodo-levels', JSON.stringify(this.state.levelsCompleted));
     }
-
-    // Save high score
     const prev = this.state.levelScores[levelKey] || 0;
     if (this.state.score > prev) {
       this.state.levelScores[levelKey] = this.state.score;
       localStorage.setItem('shodo-scores', JSON.stringify(this.state.levelScores));
     }
+  }
 
-    // Show results
-    this.showScreen('results-screen');
-
-    const stamp = document.getElementById('results-stamp');
-    const title = document.getElementById('results-title');
-    const dialogue = document.getElementById('results-dialogue');
-    const nextBtn = document.getElementById('btn-next-level');
+  _renderResults(levelKey, passed, isCustom, perfects, total) {
+    const stamp = $('results-stamp');
+    const title = $('results-title');
+    const dialogue = $('results-dialogue');
+    const nextBtn = $('btn-next-level');
 
     if (isCustom) {
-      // Custom stage: always positive, tiered encouragement
-      const score = this.state.score;
-      const perfects = this.state.perfectCount;
-      const total = this.state.characters.length;
-      const ratio = total > 0 ? perfects / total : 0;
-
-      stamp.style.color = 'var(--correct-green)';
-      stamp.style.borderColor = 'var(--correct-green)';
-      nextBtn.style.display = 'none';
-
-      if (ratio >= 0.8) {
-        stamp.textContent = '優';
-        title.textContent = '🌟 完美表現！';
-        dialogue.textContent = '你寫得太好喇！每一筆都好有功力，繼續保持！';
-      } else if (ratio >= 0.5) {
-        stamp.textContent = '良';
-        title.textContent = '🎉 表現出色！';
-        dialogue.textContent = '好叻呀！大部分字都寫得好靚，再練多幾次一定更加好！';
-      } else if (score > 0) {
-        stamp.textContent = '進';
-        title.textContent = '💪 繼續進步！';
-        dialogue.textContent = '每次練習都係進步！你已經做得好好，繼續加油！';
-      } else {
-        stamp.textContent = '練';
-        title.textContent = '✏️ 好的開始！';
-        dialogue.textContent = '萬事起頭難，你踏出咗第一步！多練幾次就會越寫越好㗎！';
-      }
+      this._renderCustomResults(stamp, title, dialogue, nextBtn, perfects, total);
     } else if (passed) {
-      stamp.textContent = '合';
-      stamp.style.color = 'var(--correct-green)';
-      stamp.style.borderColor = 'var(--correct-green)';
-      title.textContent = '🎉 修行通過！';
-      this.showDialogue('levelComplete');
-      dialogue.textContent = getDialogue(levelKey, 'levelComplete');
-
-      // Show next level button if not last level
-      const levelNum = parseInt(levelKey.replace('level', ''));
-      if (levelNum < 3) {
-        nextBtn.style.display = '';
-      } else {
-        nextBtn.style.display = 'none';
-      }
+      this._renderPassResults(stamp, title, dialogue, nextBtn, levelKey);
     } else {
-      stamp.textContent = '未';
-      stamp.style.color = 'var(--wrong-red)';
-      stamp.style.borderColor = 'var(--wrong-red)';
-      title.textContent = '修行未通過…';
-      dialogue.textContent = getDialogue(levelKey, 'levelFail');
-      nextBtn.style.display = 'none';
+      this._renderFailResults(stamp, title, dialogue, nextBtn, levelKey);
     }
 
-    // Result avatar
-    const resultExpr = document.getElementById('result-expression');
-    resultExpr.textContent = (passed || isCustom) ? '😊' : '😤';
+    $('result-expression').textContent = (passed || isCustom) ? '😊' : '😤';
+    $('result-score').textContent = this.state.score;
+    $('result-chars').textContent = total;
+    $('result-mistakes').textContent = this.state.totalMistakes;
+    $('result-hints').textContent = this.state.hintsUsedTotal;
+    $('result-perfects').textContent = perfects;
+  }
 
-    // Stats
-    document.getElementById('result-score').textContent = this.state.score;
-    document.getElementById('result-chars').textContent = this.state.characters.length;
-    document.getElementById('result-mistakes').textContent = this.state.totalMistakes;
-    document.getElementById('result-hints').textContent = this.state.hintsUsedTotal;
-    document.getElementById('result-perfects').textContent = this.state.perfectCount;
+  _renderCustomResults(stamp, title, dialogue, nextBtn, perfects, total) {
+    const ratio = total > 0 ? perfects / total : 0;
+    stamp.style.color = stamp.style.borderColor = 'var(--correct-green)';
+    nextBtn.style.display = 'none';
+
+    if (ratio >= 0.8) {
+      stamp.textContent = '優'; title.textContent = '🌟 完美表現！';
+      dialogue.textContent = '你寫得太好喇！每一筆都好有功力，繼續保持！';
+    } else if (ratio >= 0.5) {
+      stamp.textContent = '良'; title.textContent = '🎉 表現出色！';
+      dialogue.textContent = '好叻呀！大部分字都寫得好靚，再練多幾次一定更加好！';
+    } else if (this.state.score > 0) {
+      stamp.textContent = '進'; title.textContent = '💪 繼續進步！';
+      dialogue.textContent = '每次練習都係進步！你已經做得好好，繼續加油！';
+    } else {
+      stamp.textContent = '練'; title.textContent = '✏️ 好的開始！';
+      dialogue.textContent = '萬事起頭難，你踏出咗第一步！多練幾次就會越寫越好㗎！';
+    }
+  }
+
+  _renderPassResults(stamp, title, dialogue, nextBtn, levelKey) {
+    stamp.textContent = '合';
+    stamp.style.color = stamp.style.borderColor = 'var(--correct-green)';
+    title.textContent = '🎉 修行通過！';
+    dialogue.textContent = getDialogue(levelKey, 'levelComplete');
+    const levelNum = parseInt(levelKey.replace('level', ''));
+    nextBtn.style.display = levelNum < 3 ? '' : 'none';
+  }
+
+  _renderFailResults(stamp, title, dialogue, nextBtn, levelKey) {
+    stamp.textContent = '未';
+    stamp.style.color = stamp.style.borderColor = 'var(--wrong-red)';
+    title.textContent = '修行未通過…';
+    dialogue.textContent = getDialogue(levelKey, 'levelFail');
+    nextBtn.style.display = 'none';
   }
 
   retryLevel() {
-    if (this.state.currentLevel) {
-      this.startLevel(this.state.currentLevel);
-    }
+    if (this.state.currentLevel) this.startLevel(this.state.currentLevel);
   }
 
   goNextLevel() {
     const num = parseInt(this.state.currentLevel.replace('level', ''));
-    if (num < 3) {
-      this.startLevel('level' + (num + 1));
-    }
+    if (num < 3) this.startLevel('level' + (num + 1));
   }
 
   // ── Custom Stage ────────────────────────────────────────
@@ -583,25 +525,23 @@ class ShodoDojo {
       characters: data.characters
     };
 
-    // Show custom card in level select
-    const card = document.getElementById('level-card-custom');
+    const card = $('level-card-custom');
     if (card) {
       card.style.display = '';
-      const title = document.getElementById('custom-level-title');
-      const desc = document.getElementById('custom-level-desc');
-      if (title) title.textContent = CHARACTER_DB.custom.name;
+      const titleEl = $('custom-level-title');
+      const desc = $('custom-level-desc');
+      if (titleEl) titleEl.textContent = CHARACTER_DB.custom.name;
       if (desc) desc.textContent = CHARACTER_DB.custom.description + ' (' + data.characters.length + ' 字)';
     }
 
-    // Update score display
     if (this.state.levelScores.custom !== undefined) {
-      const scoreEl = document.getElementById('score-custom');
+      const scoreEl = $('score-custom');
       if (scoreEl) scoreEl.textContent = '最高分：' + this.state.levelScores.custom;
     }
   }
 
   loadCustomFromFile() {
-    document.getElementById('custom-file-input').click();
+    $('custom-file-input').click();
   }
 
   handleCustomFile(event) {
@@ -611,18 +551,7 @@ class ShodoDojo {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        let text = e.target.result;
-        // Support both JS (CUSTOM_STAGE = {...}) and JSON formats
-        let data;
-        if (text.trim().startsWith('{')) {
-          data = JSON.parse(text);
-        } else {
-          // Extract object from JS variable assignment
-          const match = text.match(/(?:const|let|var)\s+\w+\s*=\s*(\{[\s\S]*\});?\s*$/);
-          if (match) {
-            data = JSON.parse(match[1]);
-          }
-        }
+        const data = this._parseCustomData(e.target.result);
         if (data && data.characters) {
           localStorage.setItem('shodo-custom-stage', JSON.stringify(data));
           this.loadCustomStage(data);
@@ -635,6 +564,12 @@ class ShodoDojo {
     event.target.value = '';
   }
 
+  _parseCustomData(text) {
+    if (text.trim().startsWith('{')) return JSON.parse(text);
+    const match = text.match(/(?:const|let|var)\s+\w+\s*=\s*(\{[\s\S]*\});?\s*$/);
+    return match ? JSON.parse(match[1]) : null;
+  }
+
   // ── Hints ───────────────────────────────────────────────
   showHint() {
     const charData = this.state.characters[this.state.currentCharIndex];
@@ -642,7 +577,7 @@ class ShodoDojo {
 
     const hintIndex = this.state.hintsUsed;
     if (hintIndex >= charData.hints.length) {
-      document.getElementById('btn-hint').disabled = true;
+      $('btn-hint').disabled = true;
       return;
     }
 
@@ -652,19 +587,15 @@ class ShodoDojo {
     this.showDialogue('hint');
     this.setExpression('hint');
 
-    const listEl = document.getElementById('hints-list');
-    if (hintIndex === 0) {
-      listEl.innerHTML = '';
-    }
+    const listEl = $('hints-list');
+    if (hintIndex === 0) listEl.innerHTML = '';
 
     const item = document.createElement('div');
     item.className = 'hint-item';
     item.textContent = charData.hints[hintIndex];
     listEl.appendChild(item);
 
-    if (this.state.hintsUsed >= charData.hints.length) {
-      document.getElementById('btn-hint').disabled = true;
-    }
+    if (this.state.hintsUsed >= charData.hints.length) $('btn-hint').disabled = true;
   }
 
   // ── Voice ───────────────────────────────────────────────
@@ -776,7 +707,7 @@ class ShodoDojo {
 
   setBgmVolume(val) {
     this.bgmVolume = val / 100;
-    document.getElementById('bgm-volume-label').textContent = val + '%';
+    $('bgm-volume-label').textContent = val + '%';
     if (this.bgmNodes && this.bgmNodes.masterGain) {
       this.bgmNodes.masterGain.gain.value = this.bgmVolume * 0.15;
     }
@@ -784,7 +715,7 @@ class ShodoDojo {
 
   setSfxVolume(val) {
     this.sfxVolume = val / 100;
-    document.getElementById('sfx-volume-label').textContent = val + '%';
+    $('sfx-volume-label').textContent = val + '%';
   }
 
   playSFX(type) {
@@ -796,25 +727,19 @@ class ShodoDojo {
     gain.connect(ctx.destination);
     gain.gain.value = this.sfxVolume * 0.3;
 
-    if (type === 'correct') {
-      osc.type = 'sine';
-      osc.frequency.value = 880;
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.3);
-    } else if (type === 'wrong') {
-      osc.type = 'square';
-      osc.frequency.value = 200;
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.2);
-    } else if (type === 'hint') {
-      osc.type = 'triangle';
-      osc.frequency.value = 523.25;
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.25);
-    }
+    const sfxMap = {
+      correct: { wave: 'sine', freq: 880, dur: 0.3 },
+      wrong:   { wave: 'square', freq: 200, dur: 0.2 },
+      hint:    { wave: 'triangle', freq: 523.25, dur: 0.25 }
+    };
+    const cfg = sfxMap[type];
+    if (!cfg) return;
+
+    osc.type = cfg.wave;
+    osc.frequency.value = cfg.freq;
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + cfg.dur);
+    osc.start();
+    osc.stop(ctx.currentTime + cfg.dur);
   }
 
   // ── UI Updates ──────────────────────────────────────────
@@ -824,16 +749,14 @@ class ShodoDojo {
     const total = chars.length;
     const data = CHARACTER_DB[this.state.currentLevel];
 
-    document.getElementById('game-level-badge').textContent = data.name;
-    document.getElementById('char-counter').textContent = (idx + 1) + ' / ' + total;
-    document.getElementById('game-score').textContent = this.state.score;
-
-    const pct = ((idx) / total) * 100;
-    document.getElementById('game-progress-bar').style.width = pct + '%';
+    $('game-level-badge').textContent = data.name;
+    $('char-counter').textContent = (idx + 1) + ' / ' + total;
+    $('game-score').textContent = this.state.score;
+    $('game-progress-bar').style.width = ((idx / total) * 100) + '%';
   }
 
   showStrokeFeedback(text, isCorrect) {
-    const el = document.getElementById('stroke-feedback');
+    const el = $('stroke-feedback');
     el.textContent = text;
     el.className = 'stroke-feedback ' + (isCorrect ? 'show-correct' : 'show-wrong');
     setTimeout(() => { el.className = 'stroke-feedback'; }, 600);
@@ -841,38 +764,25 @@ class ShodoDojo {
 
   // ── Settings & Toggles ─────────────────────────────────
   toggleSettings() {
-    const modal = document.getElementById('settings-modal');
+    const modal = $('settings-modal');
     modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
   }
 
-  toggleAutoDemo(enabled) {
-    this.state.showStrokeDemo = enabled;
-  }
+  toggleAutoDemo(enabled) { this.state.showStrokeDemo = enabled; }
+  toggleOutline(enabled) { this.state.showOutline = enabled; }
+  toggleVoice(enabled) { this.voiceEnabled = enabled; }
 
-  toggleOutline(enabled) {
-    this.state.showOutline = enabled;
-  }
-
-  toggleVoice(enabled) {
-    this.voiceEnabled = enabled;
-  }
-
-  confirmQuit() {
-    document.getElementById('quit-modal').style.display = 'flex';
-  }
-
-  closeQuitModal() {
-    document.getElementById('quit-modal').style.display = 'none';
-  }
+  confirmQuit() { $('quit-modal').style.display = 'flex'; }
+  closeQuitModal() { $('quit-modal').style.display = 'none'; }
 
   quitLevel() {
-    document.getElementById('quit-modal').style.display = 'none';
+    $('quit-modal').style.display = 'none';
     this.cleanupWriters();
     this.showScreen('level-select');
   }
 
   quitToLobby() {
-    document.getElementById('quit-modal').style.display = 'none';
+    $('quit-modal').style.display = 'none';
     this.cleanupWriters();
     this.showScreen('title-screen');
   }
@@ -888,24 +798,18 @@ class ShodoDojo {
       const key = el.getAttribute('data-i18n');
       if (dict[key]) el.textContent = dict[key];
     });
-    const langBtn = document.getElementById('btn-lang');
+    const langBtn = $('btn-lang');
     if (langBtn) langBtn.title = this.lang === 'zh' ? '語言 / Language' : 'Language / 語言';
   }
 
   cleanupWriters() {
-    if (this.demoWriter) {
-      document.getElementById('hanzi-demo').innerHTML = '';
-      this.demoWriter = null;
-    }
-    if (this.quizWriter) {
-      document.getElementById('hanzi-quiz').innerHTML = '';
-      this.quizWriter = null;
-    }
+    if (this.demoWriter) { $('hanzi-demo').innerHTML = ''; this.demoWriter = null; }
+    if (this.quizWriter) { $('hanzi-quiz').innerHTML = ''; this.quizWriter = null; }
   }
 
   // ── Rules Screen ────────────────────────────────────────
   populateRules() {
-    const listEl = document.getElementById('rules-list');
+    const listEl = $('rules-list');
     STROKE_RULES.forEach((rule, i) => {
       const item = document.createElement('div');
       item.className = 'rule-item';
@@ -916,7 +820,7 @@ class ShodoDojo {
       listEl.appendChild(item);
     });
 
-    const gridEl = document.getElementById('stroke-grid');
+    const gridEl = $('stroke-grid');
     Object.entries(STROKE_TYPES).forEach(([key, val]) => {
       const item = document.createElement('div');
       item.className = 'stroke-item';
